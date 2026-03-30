@@ -1,0 +1,1737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ABILVERSE: FRACTURED FRAMES — V2</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:'Segoe UI',sans-serif; color:#fff; }
+canvas { display:block; }
+
+/* ── HUD ── */
+#hud { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10; }
+
+#rank-display {
+  position:fixed; top:20px; left:50%; transform:translateX(-50%);
+  background:rgba(0,0,0,0.75); border:1px solid #a855f7;
+  padding:6px 24px; border-radius:20px;
+  font-size:14px; letter-spacing:3px; color:#c084fc;
+  text-shadow:0 0 10px #a855f7;
+}
+
+#health-container { position:fixed; bottom:130px; left:30px; width:220px; }
+.bar-label { font-size:11px; color:#aaa; letter-spacing:1px; margin-bottom:4px; }
+.bar-bg { background:rgba(255,255,255,0.1); border-radius:4px; height:10px; overflow:hidden; }
+.bar-fill { height:100%; border-radius:4px; transition:width 0.15s; }
+#hp-bar  { background:linear-gradient(90deg,#ef4444,#f97316); }
+#xp-bar  { background:linear-gradient(90deg,#7c3aed,#a855f7); }
+#stamina-bar { background:linear-gradient(90deg,#0ea5e9,#38bdf8); }
+
+/* Combo counter */
+#combo-display {
+  position:fixed; top:70px; left:50%; transform:translateX(-50%);
+  font-size:32px; font-weight:900; letter-spacing:4px;
+  color:#fbbf24; text-shadow:0 0 20px #fbbf24, 0 0 40px #f59e0b;
+  opacity:0; transition:opacity 0.3s; pointer-events:none;
+}
+
+/* Dodge indicator */
+#dodge-indicator {
+  position:fixed; bottom:130px; left:260px;
+  background:rgba(0,0,0,0.7); border:1px solid #38bdf8;
+  padding:6px 14px; border-radius:20px;
+  font-size:11px; color:#7dd3fc; letter-spacing:2px;
+}
+#dodge-bar { width:80px; height:4px; background:rgba(255,255,255,0.15); border-radius:2px; margin-top:4px; overflow:hidden; }
+#dodge-fill { height:100%; background:#38bdf8; border-radius:2px; transition:width 0.1s; }
+
+/* Clan badge */
+#clan-badge {
+  position:fixed; top:20px; left:20px;
+  background:rgba(0,0,0,0.7); border:1px solid rgba(255,255,255,0.15);
+  padding:8px 14px; border-radius:10px; font-size:12px;
+}
+
+/* Ability bar */
+#ability-bar {
+  position:fixed; bottom:30px; left:50%; transform:translateX(-50%);
+  display:flex; gap:10px;
+}
+.ability-slot {
+  width:62px; height:62px; border-radius:10px;
+  background:rgba(0,0,0,0.8); border:2px solid rgba(255,255,255,0.15);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  position:relative; overflow:hidden;
+}
+.ability-slot.ready  { border-color:#a855f7; box-shadow:0 0 10px rgba(168,85,247,0.5); }
+.ability-slot.active { border-color:#fbbf24; box-shadow:0 0 20px rgba(251,191,36,0.8); }
+.ability-slot.locked { opacity:0.35; }
+.ability-key  { font-size:10px; color:#777; position:absolute; top:4px; left:7px; }
+.ability-icon { font-size:20px; }
+.ability-name { font-size:8px; color:#999; margin-top:2px; text-align:center; }
+.cooldown-overlay { position:absolute; bottom:0; left:0; width:100%; background:rgba(0,0,0,0.65); transition:height 0.1s; }
+.cooldown-text { position:absolute; bottom:4px; right:5px; font-size:11px; color:#fff; font-weight:bold; }
+
+/* Feed */
+#feed { position:fixed; top:100px; right:20px; width:210px; display:flex; flex-direction:column; gap:4px; }
+.feed-msg { background:rgba(0,0,0,0.65); border-left:3px solid #a855f7; padding:5px 10px; font-size:12px; border-radius:3px; animation:fadeMsg 3s forwards; }
+.feed-boss { border-left-color:#ef4444; }
+.feed-gold { border-left-color:#fbbf24; }
+@keyframes fadeMsg { 0%{opacity:1} 70%{opacity:1} 100%{opacity:0} }
+
+/* Crosshair */
+#crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); width:14px; height:14px; pointer-events:none; }
+#crosshair::before,#crosshair::after { content:''; position:absolute; background:rgba(255,255,255,0.65); }
+#crosshair::before { width:2px; height:100%; left:50%; transform:translateX(-50%); }
+#crosshair::after  { width:100%; height:2px; top:50%; transform:translateY(-50%); }
+
+/* Quest / Endings tracker */
+#quest { position:fixed; top:20px; right:20px; background:rgba(0,0,0,0.7); border:1px solid rgba(255,255,255,0.1); padding:12px 16px; border-radius:10px; font-size:12px; min-width:190px; }
+#quest h4 { color:#fbbf24; font-size:10px; letter-spacing:1px; margin-bottom:6px; }
+#quest p  { color:#ccc; line-height:1.7; }
+.ending-flag { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; }
+
+/* Controls */
+#controls { position:fixed; bottom:130px; left:30px; margin-top:10px; background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.08); padding:8px 12px; border-radius:8px; font-size:10px; color:#777; line-height:1.9; }
+#controls span { color:#c084fc; }
+
+/* Screen FX */
+#hit-flash     { position:fixed; inset:0; background:rgba(239,68,68,0.25); pointer-events:none; opacity:0; transition:opacity 0.08s; }
+#curse-overlay { position:fixed; inset:0; background:rgba(139,0,0,0); pointer-events:none; transition:background 0.5s; }
+#dodge-flash   { position:fixed; inset:0; background:rgba(56,189,248,0); pointer-events:none; transition:background 0.1s; }
+#ability-flash { position:fixed; inset:0; pointer-events:none; opacity:0; transition:opacity 0.25s; }
+#flow-overlay  { position:fixed; inset:0; pointer-events:none; border:3px solid rgba(251,191,36,0); transition:border-color 0.5s; }
+#flow-overlay.active { border-color:rgba(251,191,36,0.5); box-shadow:inset 0 0 60px rgba(251,191,36,0.15); }
+#sandman-vignette { position:fixed; inset:0; pointer-events:none; background:radial-gradient(ellipse at center, transparent 30%, rgba(139,0,0,0.6) 100%); opacity:0; transition:opacity 1s; }
+
+/* Flow indicator */
+#flow-indicator { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); font-size:26px; font-weight:bold; letter-spacing:8px; color:#fbbf24; text-shadow:0 0 30px #fbbf24; opacity:0; pointer-events:none; transition:opacity 0.5s; }
+
+/* Minimap */
+#minimap { position:fixed; bottom:130px; right:20px; width:110px; height:110px; border-radius:50%; background:rgba(0,0,0,0.65); border:2px solid rgba(168,85,247,0.4); overflow:hidden; }
+#minimap canvas { width:100%; height:100%; }
+
+/* Damage numbers */
+.dmg-number { position:fixed; font-size:18px; font-weight:bold; pointer-events:none; animation:floatUp 1s forwards; z-index:50; text-shadow:1px 1px 3px #000; }
+@keyframes floatUp { 0%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-55px)} }
+
+/* ── FULLSCREEN SCREENS ── */
+.fullscreen {
+  position:fixed; inset:0; z-index:200;
+  display:flex; align-items:center; justify-content:center; flex-direction:column;
+  background:rgba(0,0,0,0.95);
+}
+.fullscreen h1 { font-size:42px; margin-bottom:8px; }
+.fullscreen p  { color:#aaa; font-size:15px; margin-bottom:24px; text-align:center; max-width:480px; line-height:1.7; }
+
+/* CLAN SELECTION */
+#clan-screen { gap:32px; }
+#clan-screen h1 { color:#c084fc; text-shadow:0 0 20px #a855f7; letter-spacing:4px; }
+#clan-cards { display:flex; gap:16px; flex-wrap:wrap; justify-content:center; }
+.clan-card {
+  width:160px; padding:20px 14px; border-radius:14px; text-align:center;
+  cursor:pointer; border:2px solid rgba(255,255,255,0.1);
+  background:rgba(255,255,255,0.04); transition:all 0.2s;
+  pointer-events:all;
+}
+.clan-card:hover { transform:translateY(-4px); border-color:rgba(255,255,255,0.4); background:rgba(255,255,255,0.08); }
+.clan-card .clan-icon { font-size:36px; margin-bottom:10px; }
+.clan-card h3 { font-size:14px; margin-bottom:6px; letter-spacing:1px; }
+.clan-card p  { font-size:11px; color:#999; line-height:1.6; }
+
+/* GACHA */
+#gacha-screen h1 { color:#fbbf24; text-shadow:0 0 20px #f59e0b; letter-spacing:4px; }
+#gacha-result { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin:20px 0; }
+.gacha-card {
+  width:110px; padding:14px 10px; border-radius:12px; text-align:center;
+  border:2px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05);
+  animation:cardPop 0.4s cubic-bezier(0.34,1.56,0.64,1) backwards;
+}
+.gacha-card.rare   { border-color:#a855f7; background:rgba(168,85,247,0.12); }
+.gacha-card.epic   { border-color:#fbbf24; background:rgba(251,191,36,0.12); }
+.gacha-card.legend { border-color:#ef4444; background:rgba(239,68,68,0.15); box-shadow:0 0 20px rgba(239,68,68,0.3); }
+@keyframes cardPop { from{opacity:0;transform:scale(0.6) rotateY(90deg)} to{opacity:1;transform:scale(1) rotateY(0)} }
+.gacha-card .g-icon { font-size:28px; margin-bottom:8px; }
+.gacha-card .g-name { font-size:10px; font-weight:bold; letter-spacing:1px; }
+.gacha-card .g-tier { font-size:9px; color:#888; margin-top:3px; }
+
+/* DIALOGUE */
+#dialogue-screen {
+  position:fixed; inset:0; z-index:150;
+  display:none; flex-direction:column; justify-content:flex-end;
+  pointer-events:none;
+  background:rgba(0,0,0,0.5);
+}
+#dialogue-screen.open { display:flex; }
+#dialogue-sprite {
+  position:absolute; left:5%; bottom:160px;
+  width:180px; height:300px;
+  display:flex; align-items:flex-end; justify-content:center;
+  font-size:120px; line-height:1;
+  filter:drop-shadow(0 0 20px rgba(168,85,247,0.8));
+  animation:spriteIn 0.3s ease;
+}
+@keyframes spriteIn { from{opacity:0;transform:translateX(-30px)} to{opacity:1;transform:translateX(0)} }
+#dialogue-box {
+  margin:0 0 20px 0; padding:20px 28px; pointer-events:all;
+  background:rgba(0,0,0,0.9); border-top:2px solid rgba(168,85,247,0.5);
+  min-height:140px;
+}
+#dialogue-name { font-size:12px; letter-spacing:3px; color:#c084fc; margin-bottom:10px; }
+#dialogue-text { font-size:15px; line-height:1.8; color:#e5e5e5; min-height:52px; }
+#dialogue-choices { display:flex; flex-direction:column; gap:8px; margin-top:16px; }
+.dialogue-choice {
+  background:rgba(168,85,247,0.12); border:1px solid rgba(168,85,247,0.3);
+  padding:9px 16px; border-radius:8px; cursor:pointer; font-size:13px; color:#d8b4fe;
+  transition:all 0.15s; text-align:left;
+}
+.dialogue-choice:hover { background:rgba(168,85,247,0.25); border-color:#a855f7; }
+#dialogue-continue { font-size:12px; color:#666; margin-top:12px; text-align:right; }
+
+/* BOSS HP BAR */
+#boss-bar-wrap {
+  position:fixed; top:60px; left:50%; transform:translateX(-50%);
+  width:500px; display:none; flex-direction:column; align-items:center; gap:4px;
+}
+#boss-name-label { font-size:13px; letter-spacing:3px; color:#ef4444; text-shadow:0 0 10px #ef4444; }
+#boss-bar-bg { width:100%; height:14px; background:rgba(255,255,255,0.08); border-radius:7px; overflow:hidden; border:1px solid rgba(239,68,68,0.3); }
+#boss-bar-fill { height:100%; background:linear-gradient(90deg,#7f1d1d,#ef4444,#ff6b35); border-radius:7px; transition:width 0.2s; }
+#boss-phase-label { font-size:10px; color:#f87171; letter-spacing:2px; }
+
+/* ENDINGS TRACKER */
+#endings-tracker { font-size:11px; color:#777; margin-top:8px; border-top:1px solid rgba(255,255,255,0.08); padding-top:6px; }
+
+/* Overlay (rank up / death) */
+#overlay { position:fixed; inset:0; background:rgba(0,0,0,0.88); display:none; align-items:center; justify-content:center; flex-direction:column; gap:16px; z-index:180; }
+#overlay h1 { font-size:46px; color:#a855f7; text-shadow:0 0 30px #a855f7; }
+#overlay p  { color:#ccc; font-size:16px; }
+#overlay button { background:#7c3aed; border:none; color:#fff; padding:12px 32px; border-radius:8px; font-size:15px; cursor:pointer; pointer-events:all; margin:4px; }
+#overlay button:hover { background:#a855f7; }
+#overlay button.secondary { background:rgba(255,255,255,0.08); }
+
+/* Punch flash */
+#punch-flash { position:fixed; inset:0; pointer-events:none; opacity:0; transition:opacity 0.06s; }
+
+/* Sandman curse text */
+#curse-text { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); font-size:24px; letter-spacing:6px; color:#ff0000; text-shadow:0 0 30px #ff0000; opacity:0; pointer-events:none; transition:opacity 0.5s; }
+
+/* Gacha button in HUD */
+#gacha-btn { position:fixed; bottom:105px; left:50%; transform:translateX(-50%); background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.4); color:#fbbf24; padding:5px 20px; border-radius:20px; font-size:11px; letter-spacing:2px; cursor:pointer; pointer-events:all; }
+#gacha-btn:hover { background:rgba(251,191,36,0.3); }
+</style>
+</head>
+<body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<!-- ════════════════ CLAN SELECTION SCREEN ════════════════ -->
+<div class="fullscreen" id="clan-screen">
+  <h1>CHOOSE YOUR CLAN</h1>
+  <p>Your clan shapes your abilities, your enemies, and your fate.</p>
+  <div id="clan-cards"></div>
+</div>
+
+<!-- ════════════════ GACHA SCREEN ════════════════ -->
+<div class="fullscreen" id="gacha-screen" style="display:none; gap:20px;">
+  <h1>ABILITY GACHA</h1>
+  <p id="gacha-tokens-label">Tokens: <b id="gacha-tokens" style="color:#fbbf24">0</b> &nbsp;|&nbsp; Cost: 50 per pull (3x pull: 120)</p>
+  <div id="gacha-result"></div>
+  <div style="display:flex;gap:12px;pointer-events:all">
+    <button onclick="doPull(1)" style="background:#7c3aed;border:none;color:#fff;padding:10px 24px;border-radius:8px;font-size:14px;cursor:pointer">Pull ×1 (50)</button>
+    <button onclick="doPull(3)" style="background:#b45309;border:none;color:#fff;padding:10px 24px;border-radius:8px;font-size:14px;cursor:pointer">Pull ×3 (120)</button>
+    <button onclick="closeGacha()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:#aaa;padding:10px 24px;border-radius:8px;font-size:14px;cursor:pointer">← Back</button>
+  </div>
+  <div id="gacha-owned" style="font-size:11px;color:#666;max-width:500px;text-align:center"></div>
+</div>
+
+<!-- ════════════════ OVERLAY (Rank Up / Death) ════════════════ -->
+<div id="overlay">
+  <h1 id="overlay-title">RANK UP!</h1>
+  <p id="overlay-sub">You ascended!</p>
+  <div style="display:flex;gap:8px">
+    <button onclick="closeOverlay()">CONTINUE</button>
+    <button class="secondary" onclick="openGacha()">🎰 GACHA</button>
+  </div>
+</div>
+
+<!-- ════════════════ HUD ════════════════ -->
+<div id="hud">
+  <div id="rank-display">RANK: F</div>
+
+  <div id="clan-badge">🏴 No Clan</div>
+
+  <div id="crosshair"></div>
+
+  <div id="health-container">
+    <div class="bar-label">HP</div>
+    <div class="bar-bg"><div class="bar-fill" id="hp-bar" style="width:100%"></div></div>
+    <div style="margin-top:8px" class="bar-label">XP</div>
+    <div class="bar-bg"><div class="bar-fill" id="xp-bar" style="width:0%"></div></div>
+    <div style="margin-top:8px" class="bar-label">STAMINA (Dodge)</div>
+    <div class="bar-bg"><div class="bar-fill" id="stamina-bar" style="width:100%"></div></div>
+  </div>
+
+  <div id="combo-display">0 COMBO</div>
+
+  <div id="ability-bar">
+    <div class="ability-slot ready" id="slot-q">
+      <span class="ability-key">Q</span>
+      <span class="ability-icon">👁️</span>
+      <span class="ability-name">ECHO SENSE</span>
+      <div class="cooldown-overlay" id="cd-q" style="height:0%"></div>
+      <span class="cooldown-text" id="cdt-q"></span>
+    </div>
+    <div class="ability-slot ready" id="slot-e">
+      <span class="ability-key">E</span>
+      <span class="ability-icon">⚡</span>
+      <span class="ability-name">ECHO STRIKE</span>
+      <div class="cooldown-overlay" id="cd-e" style="height:0%"></div>
+      <span class="cooldown-text" id="cdt-e"></span>
+    </div>
+    <div class="ability-slot ready" id="slot-r">
+      <span class="ability-key">R</span>
+      <span class="ability-icon">🌀</span>
+      <span class="ability-name">SILENT FRAME</span>
+      <div class="cooldown-overlay" id="cd-r" style="height:0%"></div>
+      <span class="cooldown-text" id="cdt-r"></span>
+    </div>
+    <div class="ability-slot" id="slot-f">
+      <span class="ability-key">F</span>
+      <span class="ability-icon">🔥</span>
+      <span class="ability-name">FLOW STATE</span>
+      <div class="cooldown-overlay" id="cd-f" style="height:0%"></div>
+      <span class="cooldown-text" id="cdt-f"></span>
+    </div>
+    <div class="ability-slot locked" id="slot-g">
+      <span class="ability-key">G</span>
+      <span class="ability-icon" id="slot-g-icon">🔒</span>
+      <span class="ability-name" id="slot-g-name">GACHA SLOT</span>
+      <div class="cooldown-overlay" id="cd-g" style="height:0%"></div>
+      <span class="cooldown-text" id="cdt-g"></span>
+    </div>
+  </div>
+
+  <button id="gacha-btn" onclick="openGacha()">🎰 ABILITY GACHA</button>
+
+  <div id="feed"></div>
+
+  <div id="quest">
+    <h4>⚔ OBJECTIVE</h4>
+    <p id="quest-text">Eliminate rogue entities.</p>
+    <div id="endings-tracker">
+      <div><span class="ending-flag" style="background:#22c55e" id="ef-savior"></span>Savior Path: <span id="ep-savior">0</span></div>
+      <div><span class="ending-flag" style="background:#ef4444" id="ef-tyrant"></span>Tyrant Path: <span id="ep-tyrant">0</span></div>
+      <div><span class="ending-flag" style="background:#a855f7" id="ef-frame"></span>Frame Path: <span id="ep-frame">0</span></div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <span>WASD</span> Move &nbsp;<span>Shift</span> Sprint<br>
+    <span>Click</span> Punch combo &nbsp;<span>Space</span> Heavy<br>
+    <span>Alt / C</span> Dodge roll<br>
+    <span>Q E R F G</span> Abilities<br>
+    <span>Tab</span> Talk to NPCs
+  </div>
+
+  <!-- Screen FX -->
+  <div id="hit-flash"></div>
+  <div id="curse-overlay"></div>
+  <div id="dodge-flash"></div>
+  <div id="ability-flash"></div>
+  <div id="flow-overlay"></div>
+  <div id="sandman-vignette"></div>
+  <div id="punch-flash"></div>
+  <div id="flow-indicator">⚡ FLOW STATE ⚡</div>
+  <div id="curse-text">YOU ARE CURSED</div>
+
+  <!-- Boss bar -->
+  <div id="boss-bar-wrap">
+    <div id="boss-name-label">MR. SANDMAN</div>
+    <div id="boss-bar-bg"><div id="boss-bar-fill" style="width:100%"></div></div>
+    <div id="boss-phase-label">PHASE I — DREAM WEAVER</div>
+  </div>
+</div>
+
+<!-- ════════════════ DIALOGUE ════════════════ -->
+<div id="dialogue-screen">
+  <div id="dialogue-sprite">🧍</div>
+  <div id="dialogue-box">
+    <div id="dialogue-name">???</div>
+    <div id="dialogue-text"></div>
+    <div id="dialogue-choices"></div>
+    <div id="dialogue-continue">▼ Click to continue</div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// DATA — CLANS
+// ══════════════════════════════════════════════════════════
+const CLANS = {
+  flint: {
+    name:'Flint Clan', icon:'🔱', color:'#3b82f6',
+    desc:'Masters of cloning & transformation. High survivability.',
+    bonuses:{ hp:30, speed:0, dmg:0 },
+    ability:{ key:'g', icon:'👥', name:'CLONE STEP', cooldown:12 },
+    endingAffinity:'savior',
+  },
+  elemental: {
+    name:'Elemental Clan', icon:'⚡', color:'#f59e0b',
+    desc:'Balanced elemental power. Versatile warriors.',
+    bonuses:{ hp:0, speed:1, dmg:10 },
+    ability:{ key:'g', icon:'🌩️', name:'STORM BURST', cooldown:9 },
+    endingAffinity:'savior',
+  },
+  saeo: {
+    name:'Saeo Clan', icon:'🌀', color:'#22c55e',
+    desc:'Diverse army. Grants an extra ability slot bonus.',
+    bonuses:{ hp:15, speed:0.5, dmg:5 },
+    ability:{ key:'g', icon:'🌪️', name:'SAEO SURGE', cooldown:10 },
+    endingAffinity:'tyrant',
+  },
+  neydis: {
+    name:'Neydis Clan', icon:'🕳️', color:'#a855f7',
+    desc:'Frame control & anti-human extremists. Forbidden power.',
+    bonuses:{ hp:-10, speed:2, dmg:20 },
+    ability:{ key:'g', icon:'🔲', name:'FRAME RIP', cooldown:7 },
+    endingAffinity:'frame',
+  },
+};
+
+// ══════════════════════════════════════════════════════════
+// DATA — GACHA ABILITY POOL
+// ══════════════════════════════════════════════════════════
+const GACHA_POOL = [
+  { id:'gravity',   name:'GRAVITY WELL', icon:'⚫', tier:'rare',   cooldown:11, desc:'Pulls nearby enemies together' },
+  { id:'regen',     name:'VOID HEAL',    icon:'💚', tier:'rare',   cooldown:16, desc:'Instantly recover 40 HP' },
+  { id:'timebomb',  name:'ECHO BOMB',    icon:'💣', tier:'rare',   cooldown:13, desc:'Plant a delayed echo explosion' },
+  { id:'shield',    name:'FRAME SHIELD', icon:'🛡️', tier:'epic',   cooldown:18, desc:'Block all damage for 2 seconds' },
+  { id:'blink',     name:'BLINK STEP',   icon:'🌀', tier:'epic',   cooldown:8,  desc:'Teleport 10m forward instantly' },
+  { id:'berserker', name:'BERSERKER',    icon:'🔴', tier:'epic',   cooldown:20, desc:'Deal triple damage for 4 seconds' },
+  { id:'resonance', name:'RESONANCE',    icon:'🌌', tier:'legend', cooldown:25, desc:'Legendary: AOE reality collapse' },
+  { id:'revive',    name:'ECHO SOUL',    icon:'✨', tier:'legend', cooldown:60, desc:'Legendary: Revive from death once' },
+];
+
+// ══════════════════════════════════════════════════════════
+// DATA — DIALOGUES
+// ══════════════════════════════════════════════════════════
+const DIALOGUES = {
+  survivor: {
+    sprite:'🧟', name:'SURVIVOR',
+    lines:[
+      { text:'You… you actually fought back against them. I never thought anyone could.', choices:null },
+      { text:'The entities have been appearing everywhere since the Frame started cracking. Are you one of the awakened?', choices:[
+        { text:'Yes — and I plan to protect people.', next:'survivor_savior', endingFlag:'savior' },
+        { text:'I only protect myself.', next:'survivor_tyrant', endingFlag:'tyrant' },
+        { text:'I\'m going to break the Frame completely.', next:'survivor_frame', endingFlag:'frame' },
+      ]},
+    ],
+    branches:{
+      survivor_savior:[{ text:'Then you\'re the hope this district has been waiting for. Please… don\'t abandon us.', choices:null }],
+      survivor_tyrant:[{ text:'…Of course. Just like the rest of them.', choices:null }],
+      survivor_frame: [{ text:'You\'re insane. But insane might be exactly what we need right now.', choices:null }],
+    },
+  },
+  sandman_warn: {
+    sprite:'😴', name:'MR. SANDMAN',
+    lines:[
+      { text:'Do not look at me.', choices:null },
+      { text:'Everyone who sees my face dreams forever.', choices:null },
+      { text:'I am the silence between heartbeats. I am the weight on your chest at 3AM.', choices:null },
+      { text:'You will join the others.', choices:null },
+    ],
+    branches:{},
+  },
+};
+
+// ══════════════════════════════════════════════════════════
+// GAME STATE
+// ══════════════════════════════════════════════════════════
+const state = {
+  hp:100, maxHp:100,
+  xp:0, xpToNext:100,
+  stamina:100, maxStamina:100,
+  rank:0, kills:0,
+  tokens:0,
+  flowActive:false, flowTimer:0,
+  cursed:false, curseTimer:0,
+  dodging:false, dodgeTimer:0, dodgeCooldown:0,
+  comboCount:0, comboTimer:0, lastHitTime:0,
+  punchPhase:0, punchCooldown:0,
+  selectedClan:null,
+  gachaAbility:null,
+  gachaOwned:[],
+  endingPoints:{ savior:0, tyrant:0, frame:0 },
+  bossSpawned:false, bossDefeated:false,
+  hasRevive:false, reviveUsed:false,
+  shieldActive:false,
+  berserkerActive:false, berserkerTimer:0,
+};
+
+const RANKS = ['F-','F','F+','D-','D','D+','C-','C','C+','B-','B','B+','A-','A','A+','S','X'];
+
+const abilities = {
+  q:{ name:'Echo Sense',   cooldown:8,  timer:0, duration:5,  active:false },
+  e:{ name:'Echo Strike',  cooldown:6,  timer:0 },
+  r:{ name:'Silent Frame', cooldown:15, timer:0, duration:3 },
+  f:{ name:'Flow State',   cooldown:30, timer:0, duration:8,  active:false },
+  g:{ name:'(none)',       cooldown:10, timer:0, active:false },
+};
+
+// ══════════════════════════════════════════════════════════
+// CLAN SELECTION UI
+// ══════════════════════════════════════════════════════════
+(function buildClanCards(){
+  const container = document.getElementById('clan-cards');
+  Object.entries(CLANS).forEach(([key,clan]) => {
+    const card = document.createElement('div');
+    card.className = 'clan-card';
+    card.style.borderColor = clan.color + '55';
+    card.innerHTML = `<div class="clan-icon">${clan.icon}</div><h3 style="color:${clan.color}">${clan.name}</h3><p>${clan.desc}</p>`;
+    card.onclick = () => selectClan(key);
+    container.appendChild(card);
+  });
+})();
+
+function selectClan(key) {
+  const clan = CLANS[key];
+  state.selectedClan = key;
+  state.maxHp = 100 + clan.bonuses.hp;
+  state.hp = state.maxHp;
+
+  // Set G-slot ability
+  abilities.g.name = clan.ability.name;
+  abilities.g.cooldown = clan.ability.cooldown;
+  document.getElementById('slot-g-icon').textContent = clan.ability.icon;
+  document.getElementById('slot-g-name').textContent  = clan.ability.name;
+  document.getElementById('slot-g').classList.remove('locked');
+  document.getElementById('slot-g').classList.add('ready');
+
+  document.getElementById('clan-badge').textContent = clan.icon + ' ' + clan.name;
+  document.getElementById('clan-badge').style.borderColor = clan.color + '88';
+
+  document.getElementById('clan-screen').style.display = 'none';
+  updateHud();
+  addFeed(`${clan.icon} Joined ${clan.name}!`);
+
+  // Trigger first NPC dialogue after a delay
+  setTimeout(() => startDialogue('survivor'), 2500);
+}
+
+// ══════════════════════════════════════════════════════════
+// THREE.JS SETUP
+// ══════════════════════════════════════════════════════════
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ReinhardToneMapping;
+renderer.toneMappingExposure = 1.1;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x06000e, 0.032);
+scene.background = new THREE.Color(0x06000e);
+
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 300);
+
+// Lighting
+const ambient = new THREE.AmbientLight(0x150025, 1.8);
+scene.add(ambient);
+const moonLight = new THREE.DirectionalLight(0x3355ff, 0.7);
+moonLight.position.set(20,40,20);
+moonLight.castShadow = true;
+moonLight.shadow.mapSize.set(2048,2048);
+moonLight.shadow.camera.far = 200;
+['left','right','top','bottom'].forEach((s,i) => moonLight.shadow.camera[s] = [-60,60,60,-60][i]);
+scene.add(moonLight);
+const purpleLight = new THREE.PointLight(0x9333ea, 3, 30);
+purpleLight.position.set(0,8,0);
+scene.add(purpleLight);
+
+// ── WORLD ──
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(200,200,30,30),
+  new THREE.MeshStandardMaterial({ color:0x0d0015, roughness:0.95 })
+);
+ground.rotation.x = -Math.PI/2; ground.receiveShadow = true;
+scene.add(ground);
+scene.add(new THREE.GridHelper(200,50,0x2d1060,0x150030));
+
+function makeBuilding(x,z,w,h,d,col=0x1a0030){
+  const geo = new THREE.BoxGeometry(w,h,d);
+  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color:col, roughness:0.7, metalness:0.3 }));
+  mesh.position.set(x,h/2,z); mesh.castShadow = true; mesh.receiveShadow = true;
+  scene.add(mesh);
+  const line = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color:0x7c3aed, transparent:true, opacity:0.35 }));
+  line.position.copy(mesh.position); scene.add(line);
+}
+[[-20,-20,6,12,6],[15,-25,8,18,8],[-30,10,5,8,5],[25,15,7,20,7],[-10,30,6,14,6],[30,-10,5,10,5],[-40,-5,8,16,8],[10,40,6,12,6],[-25,40,5,8,5],[40,30,7,24,7],[-50,20,6,10,6],[50,-20,8,18,8]].forEach(p => makeBuilding(...p));
+
+// Particles
+const pGeo = new THREE.BufferGeometry();
+const pCount = 400, pPos = new Float32Array(pCount*3);
+for(let i=0;i<pCount;i++){ pPos[i*3]=(Math.random()-0.5)*120; pPos[i*3+1]=Math.random()*22+1; pPos[i*3+2]=(Math.random()-0.5)*120; }
+pGeo.setAttribute('position', new THREE.BufferAttribute(pPos,3));
+const particles = new THREE.Points(pGeo, new THREE.PointsMaterial({ color:0xa855f7, size:0.14, transparent:true, opacity:0.55 }));
+scene.add(particles);
+
+// ── NPC Survivor ──
+const npcGroup = new THREE.Group();
+const npcBody = new THREE.Mesh(new THREE.BoxGeometry(0.6,1.1,0.35), new THREE.MeshStandardMaterial({ color:0x334155, roughness:0.6 }));
+npcBody.position.y = 0.55; npcGroup.add(npcBody);
+const npcHead = new THREE.Mesh(new THREE.SphereGeometry(0.28,8,8), new THREE.MeshStandardMaterial({ color:0xb45309, roughness:0.5 }));
+npcHead.position.y = 1.38; npcGroup.add(npcHead);
+const npcLight = new THREE.PointLight(0x22c55e, 1.5, 5);
+npcLight.position.y = 1.5; npcGroup.add(npcLight);
+npcGroup.position.set(6, 0, 6);
+scene.add(npcGroup);
+
+// Interaction marker above NPC
+const markerGeo = new THREE.TorusGeometry(0.4, 0.04, 6, 16);
+const markerMesh = new THREE.Mesh(markerGeo, new THREE.MeshBasicMaterial({ color:0x22c55e }));
+markerMesh.position.set(0,2.2,0); markerMesh.rotation.x = Math.PI/2;
+npcGroup.add(markerMesh);
+
+// ── PLAYER ──
+const playerGroup = new THREE.Group();
+scene.add(playerGroup);
+
+// Arms for punch animation
+const armL = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.7,0.22), new THREE.MeshStandardMaterial({ color:0x4c1d95, roughness:0.5 }));
+armL.position.set(-0.46,0.6,0); playerGroup.add(armL);
+const armR = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.7,0.22), new THREE.MeshStandardMaterial({ color:0x4c1d95, roughness:0.5 }));
+armR.position.set(0.46,0.6,0); playerGroup.add(armR);
+
+const playerBody = new THREE.Mesh(new THREE.BoxGeometry(0.7,1.2,0.4), new THREE.MeshStandardMaterial({ color:0x4c1d95, roughness:0.4, metalness:0.6 }));
+playerBody.position.y = 0.6; playerBody.castShadow = true; playerGroup.add(playerBody);
+
+const playerHead = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.5,0.5), new THREE.MeshStandardMaterial({ color:0x6d28d9, roughness:0.4 }));
+playerHead.position.y = 1.45; playerHead.castShadow = true; playerGroup.add(playerHead);
+
+const auraGeo = new THREE.TorusGeometry(0.6,0.05,8,24);
+const auraMat = new THREE.MeshBasicMaterial({ color:0xa855f7, transparent:true, opacity:0.5 });
+const aura = new THREE.Mesh(auraGeo, auraMat);
+aura.rotation.x = Math.PI/2; aura.position.y = 0.1; playerGroup.add(aura);
+
+const playerLight = new THREE.PointLight(0xa855f7, 2, 8);
+playerLight.position.y = 1; playerGroup.add(playerLight);
+
+// ══════════════════════════════════════════════════════════
+// ENEMIES
+// ══════════════════════════════════════════════════════════
+const enemies = [];
+
+function createEnemy(x, z, type='basic'){
+  const group = new THREE.Group();
+  const isBoss = type === 'sandman';
+  const scale = isBoss ? 1.6 : 1;
+
+  const bMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.8*scale, 1.4*scale, 0.4*scale),
+    new THREE.MeshStandardMaterial({ color: isBoss ? 0x1a0000 : 0x7f1d1d, roughness:0.5 })
+  );
+  bMesh.position.y = 0.7*scale; bMesh.castShadow = true; group.add(bMesh);
+
+  const hMesh = new THREE.Mesh(
+    isBoss ? new THREE.CylinderGeometry(0.35*scale,0.35*scale,0.5*scale,8) : new THREE.SphereGeometry(0.3*scale,8,8),
+    new THREE.MeshStandardMaterial({ color: isBoss ? 0x000000 : 0x991b1b })
+  );
+  hMesh.position.y = isBoss ? 1.85*scale : 1.65*scale; hMesh.castShadow = true; group.add(hMesh);
+
+  // Eyes
+  const eyeCol = isBoss ? 0xffffff : 0xff4444;
+  [-0.15*scale, 0.15*scale].forEach(ex => {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.09*scale,6,6), new THREE.MeshBasicMaterial({ color:eyeCol }));
+    eye.position.set(ex, hMesh.position.y, 0.28*scale); group.add(eye);
+  });
+
+  if(isBoss){
+    // Sandman: floating sand particles
+    for(let i=0;i<20;i++){
+      const s = new THREE.Mesh(new THREE.SphereGeometry(0.08,4,4), new THREE.MeshBasicMaterial({ color:0xfbbf24, transparent:true, opacity:0.7 }));
+      s.position.set((Math.random()-0.5)*3, Math.random()*3, (Math.random()-0.5)*3);
+      group.add(s);
+    }
+    // Warning: don't look sign above head
+    const warnGeo = new THREE.PlaneGeometry(1.5,0.4);
+    const warnMat = new THREE.MeshBasicMaterial({ color:0xff0000, side:THREE.DoubleSide, transparent:true, opacity:0.8 });
+    const warn = new THREE.Mesh(warnGeo, warnMat);
+    warn.position.set(0, 3.2, 0); group.add(warn);
+    group.userData.warningSign = warn;
+  }
+
+  const eLight = new THREE.PointLight(isBoss ? 0xffffff : 0xff2200, isBoss ? 3 : 1.5, isBoss ? 12 : 6);
+  eLight.position.y = 1; group.add(eLight);
+  group.position.set(x,0,z);
+
+  const maxHp = isBoss ? 600 : 80;
+  const enemy = {
+    mesh:group, hp:maxHp, maxHp, type,
+    speed: isBoss ? 1.8 : 2+Math.random()*1,
+    state:'patrol', stunTimer:0,
+    patrolAngle:Math.random()*Math.PI*2,
+    patrolOrigin:new THREE.Vector3(x,0,z),
+    attackTimer: isBoss ? 0 : 0,
+    alive:true,
+    lookCurseTimer:0,
+    sandAttackPhase:0,
+    phase: isBoss ? 1 : 0,
+    isBoss,
+  };
+
+  scene.add(group);
+  enemies.push(enemy);
+  addEnemyHpBar(enemy, scale);
+  return enemy;
+}
+
+function addEnemyHpBar(enemy, scale=1){
+  const bg = new THREE.Mesh(new THREE.PlaneGeometry(1.2*scale,0.14), new THREE.MeshBasicMaterial({ color:0x222222, side:THREE.DoubleSide }));
+  bg.position.set(0,(enemy.isBoss?4.2:2.4)*scale,0);
+  enemy.mesh.add(bg);
+  const fg = new THREE.Mesh(new THREE.PlaneGeometry(1.2*scale,0.14), new THREE.MeshBasicMaterial({ color:enemy.isBoss?0xff6600:0xef4444, side:THREE.DoubleSide }));
+  fg.position.set(0,0.001,0); bg.add(fg);
+  enemy.hpBarBg = bg; enemy.hpBarFg = fg;
+}
+
+// Spawn regular enemies
+[[10,10],[-15,8],[20,-5],[-8,-20],[18,20],[-22,-15],[12,-15],[-5,15]].forEach(([x,z]) => createEnemy(x,z,'basic'));
+
+// ══════════════════════════════════════════════════════════
+// INPUT
+// ══════════════════════════════════════════════════════════
+const keys = {};
+const mouse = { dx:0, dy:0, buttons:{} };
+let pointerLocked = false, yaw = 0, pitch = 0;
+
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (dialogueOpen) { advanceDialogue(); return; }
+  if (!pointerLocked) return;
+  if(e.code==='KeyQ') useAbility('q');
+  if(e.code==='KeyE') useAbility('e');
+  if(e.code==='KeyR') useAbility('r');
+  if(e.code==='KeyF') useAbility('f');
+  if(e.code==='KeyG' && !document.getElementById('slot-g').classList.contains('locked')) useAbility('g');
+  if(e.code==='Space'){ e.preventDefault(); heavyAttack(); }
+  if(e.code==='AltLeft'||e.code==='KeyC'){ e.preventDefault(); dodge(); }
+  if(e.code==='Tab'){ e.preventDefault(); tryTalkNPC(); }
+});
+document.addEventListener('keyup', e => keys[e.code]=false);
+document.addEventListener('mousemove', e => { if(pointerLocked){ mouse.dx=e.movementX; mouse.dy=e.movementY; }});
+document.addEventListener('mousedown', e => {
+  if(!pointerLocked){ renderer.domElement.requestPointerLock(); return; }
+  mouse.buttons[e.button]=true;
+  if(e.button===0) punch();
+});
+document.addEventListener('mouseup', e => mouse.buttons[e.button]=false);
+document.addEventListener('pointerlockchange', () => { pointerLocked = document.pointerLockElement===renderer.domElement; });
+renderer.domElement.addEventListener('click', () => { if(!pointerLocked) renderer.domElement.requestPointerLock(); });
+window.addEventListener('resize', () => { camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth,window.innerHeight); });
+
+// ══════════════════════════════════════════════════════════
+// PUNCH COMBO SYSTEM
+// ══════════════════════════════════════════════════════════
+const PUNCH_SEQUENCE = [
+  { arm:'L', reach:0.8, dmgMult:1.0, name:'JAB' },
+  { arm:'R', reach:0.9, dmgMult:1.2, name:'CROSS' },
+  { arm:'L', reach:0.7, dmgMult:0.9, name:'HOOK' },
+  { arm:'R', reach:1.1, dmgMult:1.8, name:'UPPERCUT', special:true },
+];
+let punchAnimating = false;
+let punchReset = null;
+
+function punch(){
+  if(state.punchCooldown > 0 || punchAnimating) return;
+  if(state.cursed) return; // curse prevents attacks
+
+  const phase = state.punchPhase % PUNCH_SEQUENCE.length;
+  const p = PUNCH_SEQUENCE[phase];
+  state.punchPhase++;
+  state.punchCooldown = 0.28;
+  punchAnimating = true;
+
+  // Clear combo reset timer
+  if(punchReset) clearTimeout(punchReset);
+  punchReset = setTimeout(() => { state.punchPhase = 0; state.comboCount = 0; updateComboDisplay(); }, 1200);
+
+  // Arm animation
+  const arm = p.arm === 'L' ? armL : armR;
+  const origZ = arm.position.z;
+  const origY = arm.position.y;
+  arm.position.z = -p.reach;
+  arm.position.y = origY + (p.special ? 0.4 : 0);
+  arm.rotation.x = p.special ? -0.6 : -0.3;
+  setTimeout(() => {
+    arm.position.z = origZ;
+    arm.position.y = origY;
+    arm.rotation.x = 0;
+    punchAnimating = false;
+  }, 180);
+
+  // Punch flash
+  const pf = document.getElementById('punch-flash');
+  pf.style.background = p.special ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.06)';
+  pf.style.opacity = '1';
+  setTimeout(() => pf.style.opacity = '0', 80);
+
+  // Hit detection
+  const forward = new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+  let hit = false;
+  enemies.forEach(e => {
+    if(!e.alive) return;
+    const dist = e.mesh.position.distanceTo(playerGroup.position);
+    const toE = e.mesh.position.clone().sub(playerGroup.position).normalize();
+    if(dist < 4.5 && forward.dot(toE) > 0.35){
+      // Sandman eye-contact check
+      if(e.isBoss && !state.flowActive) applyCurse();
+      const base = 15 + Math.floor(Math.random()*10);
+      let dmg = Math.floor(base * p.dmgMult);
+      if(state.flowActive) dmg = Math.floor(dmg*1.8);
+      if(state.berserkerActive) dmg = Math.floor(dmg*3);
+      damageEnemy(e, dmg, p.special ? '#fbbf24' : '#ff6666');
+      hit = true;
+      // Combo increment
+      state.comboCount++;
+      state.lastHitTime = Date.now();
+      updateComboDisplay();
+      // Update endings
+      if(e.isBoss) addEndingPoints('frame', 2);
+      else if(state.kills % 5 === 0) addEndingPoints('tyrant', 1);
+    }
+  });
+
+  if(hit) spawnHitSpark(playerGroup.position.clone().add(new THREE.Vector3(-Math.sin(yaw)*3, 1, -Math.cos(yaw)*3)));
+  else spawnSwingEffect();
+}
+
+function heavyAttack(){
+  // Big AOE punch
+  if(state.punchCooldown > 0) return;
+  state.punchCooldown = 0.8;
+  state.punchPhase = 0;
+
+  flashAbility(0xa855f7, 0.35);
+  // Both arms forward
+  [armL, armR].forEach(arm => {
+    arm.position.z = -1.5; arm.rotation.x = -0.8;
+    setTimeout(() => { arm.position.z = 0; arm.rotation.x = 0; }, 250);
+  });
+
+  const forward = new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+  enemies.forEach(e => {
+    if(!e.alive) return;
+    const dist = e.mesh.position.distanceTo(playerGroup.position);
+    const toE = e.mesh.position.clone().sub(playerGroup.position).normalize();
+    if(dist < 5.5 && forward.dot(toE) > 0.2){
+      const dmg = (30 + Math.floor(Math.random()*20)) * (state.flowActive ? 2 : 1);
+      damageEnemy(e, dmg, '#ff8800');
+      // Knockback
+      const kb = toE.clone().multiplyScalar(3);
+      e.mesh.position.add(kb);
+    }
+  });
+}
+
+function updateComboDisplay(){
+  const el = document.getElementById('combo-display');
+  if(state.comboCount >= 2){
+    el.textContent = state.comboCount + ' COMBO';
+    el.style.opacity = '1';
+    el.style.fontSize = Math.min(28 + state.comboCount*2, 56) + 'px';
+  } else {
+    el.style.opacity = '0';
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// DODGE SYSTEM
+// ══════════════════════════════════════════════════════════
+function dodge(){
+  if(state.dodgeCooldown > 0 || state.stamina < 25) return;
+  state.dodging = true;
+  state.dodgeTimer = 0.35;
+  state.dodgeCooldown = 1.2;
+  state.stamina = Math.max(0, state.stamina - 25);
+
+  // Dodge direction = current move dir or backward
+  const df = new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+  const moveDir = new THREE.Vector3();
+  if(keys['KeyW']||keys['ArrowUp']) moveDir.z -= 1;
+  if(keys['KeyS']||keys['ArrowDown']) moveDir.z += 1;
+  if(keys['KeyA']||keys['ArrowLeft']) moveDir.x -= 1;
+  if(keys['KeyD']||keys['ArrowRight']) moveDir.x += 1;
+  const dodgeDir = moveDir.length()>0 ? moveDir.normalize().applyAxisAngle(new THREE.Vector3(0,1,0),yaw) : df.clone().negate();
+
+  playerGroup.position.addScaledVector(dodgeDir, 4);
+
+  // Visual: dodge flash + afterimage
+  const df2 = document.getElementById('dodge-flash');
+  df2.style.background = 'rgba(56,189,248,0.15)';
+  setTimeout(() => df2.style.background = 'rgba(56,189,248,0)', 200);
+
+  // Afterimage
+  const ghost = new THREE.Mesh(
+    new THREE.BoxGeometry(0.7,1.8,0.5),
+    new THREE.MeshBasicMaterial({ color:0x38bdf8, transparent:true, opacity:0.5 })
+  );
+  ghost.position.copy(playerGroup.position);
+  ghost.position.y += 0.9;
+  scene.add(ghost);
+  const start = Date.now();
+  (function fadeGhost(){
+    const t = (Date.now()-start)/400;
+    if(t>=1){ scene.remove(ghost); return; }
+    ghost.material.opacity = 0.5*(1-t);
+    requestAnimationFrame(fadeGhost);
+  })();
+
+  addFeed('Dodge roll!');
+}
+
+// ══════════════════════════════════════════════════════════
+// ABILITY SYSTEM
+// ══════════════════════════════════════════════════════════
+function useAbility(key){
+  const ab = abilities[key];
+  if(ab.timer > 0) return;
+  ab.timer = ab.cooldown;
+
+  const clan = CLANS[state.selectedClan] || null;
+
+  if(key==='q'){
+    ab.active = true;
+    flashAbility(0x7c3aed, 0.3);
+    addFeed('👁 Echo Sense — enemies revealed');
+    enemies.forEach(e => {
+      if(!e.alive) return;
+      e.mesh.children.forEach(c => { if(c.material){ c.material.emissive=new THREE.Color(0x9333ea); c.material.emissiveIntensity=1; }});
+      setTimeout(() => { if(!e.alive) return; e.mesh.children.forEach(c => { if(c.material?.emissive) c.material.emissiveIntensity=0; }); }, ab.duration*1000);
+    });
+    setTimeout(() => ab.active=false, ab.duration*1000);
+
+  } else if(key==='e'){
+    flashAbility(0xa855f7, 0.4);
+    addFeed('⚡ Echo Strike!');
+    spawnEchoEffect(playerGroup.position.clone(), yaw);
+    const fwd = new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+    enemies.forEach(e => {
+      if(!e.alive) return;
+      const dist = e.mesh.position.distanceTo(playerGroup.position);
+      const dot = fwd.dot(e.mesh.position.clone().sub(playerGroup.position).normalize());
+      if(dist<9 && dot>0.3){
+        const dmg = state.flowActive ? 65 : 40;
+        damageEnemy(e, dmg, '#c084fc');
+        addEndingPoints('frame', 1);
+      }
+    });
+
+  } else if(key==='r'){
+    flashAbility(0x7e22ce, 0.5);
+    addFeed('🌀 Silent Frame — perception frozen!');
+    spawnSilentFrameEffect();
+    enemies.forEach(e => {
+      if(!e.alive) return;
+      if(e.mesh.position.distanceTo(playerGroup.position)<16){
+        e.stunTimer = 3; e.state = 'stunned';
+        e.mesh.children.forEach(c => { if(c.material){ c.material.emissive=new THREE.Color(0x7c3aed); c.material.emissiveIntensity=2; }});
+        setTimeout(() => { if(!e.alive) return; e.mesh.children.forEach(c => { if(c.material?.emissive) c.material.emissiveIntensity=0; }); e.state='chase'; }, 3000);
+      }
+    });
+
+  } else if(key==='f'){
+    state.flowActive = true; state.flowTimer = 8;
+    flashAbility(0xfbbf24, 0.6);
+    addFeed('🔥 FLOW STATE — Resonance Overload!');
+    document.getElementById('flow-indicator').style.opacity='1';
+    document.getElementById('flow-overlay').classList.add('active');
+    auraMat.color.set(0xfbbf24); playerLight.color.set(0xfbbf24); playerLight.intensity=4;
+    // cure curse in flow
+    state.cursed=false; state.curseTimer=0;
+    document.getElementById('curse-overlay').style.background='rgba(139,0,0,0)';
+    document.getElementById('sandman-vignette').style.opacity='0';
+    document.getElementById('curse-text').style.opacity='0';
+    setTimeout(() => {
+      state.flowActive=false;
+      document.getElementById('flow-indicator').style.opacity='0';
+      document.getElementById('flow-overlay').classList.remove('active');
+      auraMat.color.set(0xa855f7); playerLight.color.set(0xa855f7); playerLight.intensity=2;
+    }, 8000);
+
+  } else if(key==='g'){
+    // Clan ability
+    activateClanAbility();
+  }
+}
+
+function activateClanAbility(){
+  const key = state.selectedClan;
+  if(!key) return;
+  flashAbility(0x22c55e, 0.4);
+
+  if(key==='flint'){
+    // Clone step: spawn a decoy clone that distracts enemies for 5s
+    addFeed('👥 Clone Step — decoy spawned!');
+    const clone = new THREE.Mesh(new THREE.BoxGeometry(0.7,1.8,0.5), new THREE.MeshBasicMaterial({ color:0x3b82f6, transparent:true, opacity:0.6 }));
+    clone.position.copy(playerGroup.position);
+    clone.position.y += 0.9;
+    scene.add(clone);
+    // enemies target clone for 4s
+    const cloneTarget = clone.position.clone();
+    enemies.forEach(e => { if(e.alive) e._cloneTarget = cloneTarget; });
+    setTimeout(() => { scene.remove(clone); enemies.forEach(e => delete e._cloneTarget); }, 4000);
+    addEndingPoints('savior',2);
+
+  } else if(key==='elemental'){
+    addFeed('🌩️ Storm Burst — lightning AOE!');
+    enemies.forEach(e => {
+      if(!e.alive) return;
+      if(e.mesh.position.distanceTo(playerGroup.position)<12){
+        damageEnemy(e, 50, '#fbbf24');
+        e.stunTimer = 1.5;
+      }
+    });
+    spawnLightningEffect(playerGroup.position.clone());
+    addEndingPoints('savior',1);
+
+  } else if(key==='saeo'){
+    addFeed('🌪️ Saeo Surge — power amplified!');
+    state.berserkerActive = true; state.berserkerTimer = 6;
+    flashAbility(0x22c55e, 0.5);
+    addEndingPoints('tyrant',2);
+
+  } else if(key==='neydis'){
+    addFeed('🔲 Frame Rip — reality tears!');
+    spawnFrameRipEffect();
+    enemies.forEach(e => {
+      if(!e.alive) return;
+      if(e.mesh.position.distanceTo(playerGroup.position)<20){
+        damageEnemy(e, 30, '#a855f7');
+        e.stunTimer = 2;
+      }
+    });
+    addEndingPoints('frame',3);
+    if(state.hp < state.maxHp*0.3) addEndingPoints('frame',2);
+  }
+}
+
+// Gacha G-slot ability usage
+function useGachaAbility(){
+  if(!state.gachaAbility) return;
+  const a = state.gachaAbility;
+  if(a.id==='gravity'){
+    addFeed('⚫ Gravity Well!');
+    enemies.forEach(e => {
+      if(!e.alive) return;
+      const dir = playerGroup.position.clone().sub(e.mesh.position);
+      if(dir.length()<15) e.mesh.position.addScaledVector(dir.normalize(),4);
+    });
+  } else if(a.id==='regen'){
+    addFeed('💚 Void Heal +40 HP');
+    state.hp = Math.min(state.maxHp, state.hp+40); updateHud();
+    addEndingPoints('savior',1);
+  } else if(a.id==='shield'){
+    addFeed('🛡️ Frame Shield active!');
+    state.shieldActive = true;
+    setTimeout(() => state.shieldActive=false, 2000);
+  } else if(a.id==='blink'){
+    addFeed('🌀 Blink Step!');
+    const fwd = new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+    playerGroup.position.addScaledVector(fwd, 10);
+    spawnBlinkEffect();
+  } else if(a.id==='berserker'){
+    addFeed('🔴 Berserker — triple damage!');
+    state.berserkerActive=true; state.berserkerTimer=4;
+    addEndingPoints('tyrant',2);
+  } else if(a.id==='resonance'){
+    addFeed('🌌 RESONANCE — reality collapses!');
+    enemies.forEach(e => { if(e.alive && !e.isBoss) damageEnemy(e,999,'#ff0000'); });
+    flashAbility(0xff0000, 0.8);
+    addEndingPoints('frame',5);
+  } else if(a.id==='revive'){
+    if(!state.hasRevive){ state.hasRevive=true; addFeed('✨ Echo Soul stored — you will revive once!'); }
+  } else if(a.id==='timebomb'){
+    addFeed('💣 Echo Bomb planted!');
+    spawnEchoBomb(playerGroup.position.clone());
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// VISUAL EFFECTS
+// ══════════════════════════════════════════════════════════
+function spawnEchoEffect(pos){
+  const geo = new THREE.CylinderGeometry(0,4,0.5,8);
+  const mat = new THREE.MeshBasicMaterial({ color:0xa855f7, transparent:true, opacity:0.6, wireframe:true });
+  const mesh = new THREE.Mesh(geo,mat);
+  mesh.position.copy(pos); mesh.position.y += 0.5; scene.add(mesh);
+  const s = Date.now();
+  (function a(){ const t=(Date.now()-s)/600; if(t>=1){scene.remove(mesh);return;} mesh.material.opacity=0.6*(1-t); mesh.scale.setScalar(1+t*2); requestAnimationFrame(a); })();
+}
+
+function spawnSilentFrameEffect(){
+  const geo = new THREE.TorusGeometry(14,0.1,8,48);
+  const mat = new THREE.MeshBasicMaterial({ color:0x7c3aed, transparent:true, opacity:0.8 });
+  const mesh = new THREE.Mesh(geo,mat);
+  mesh.position.copy(playerGroup.position); mesh.position.y+=1; mesh.rotation.x=Math.PI/2; scene.add(mesh);
+  const s=Date.now();
+  (function a(){ const t=(Date.now()-s)/1000; if(t>=1){scene.remove(mesh);return;} mesh.material.opacity=0.8*(1-t); mesh.scale.setScalar(1-t*0.4); requestAnimationFrame(a); })();
+}
+
+function spawnSwingEffect(){
+  const geo = new THREE.TorusGeometry(1.2,0.05,4,12,Math.PI);
+  const mat = new THREE.MeshBasicMaterial({ color:0xc084fc, transparent:true, opacity:0.8, side:THREE.DoubleSide });
+  const mesh = new THREE.Mesh(geo,mat);
+  mesh.position.copy(playerGroup.position); mesh.position.y+=1; mesh.rotation.y=yaw; scene.add(mesh);
+  setTimeout(() => scene.remove(mesh), 120);
+}
+
+function spawnHitSpark(pos){
+  for(let i=0;i<7;i++){
+    const s = new THREE.Mesh(new THREE.SphereGeometry(0.055,4,4), new THREE.MeshBasicMaterial({ color:0xff6600 }));
+    s.position.copy(pos); scene.add(s);
+    const vel = new THREE.Vector3((Math.random()-0.5)*6, Math.random()*5, (Math.random()-0.5)*6);
+    const st=Date.now();
+    (function a(){ const t=(Date.now()-st)/400; if(t>=1){scene.remove(s);return;} s.position.addScaledVector(vel,0.016); vel.y-=0.15; s.material.opacity=1-t; s.material.transparent=true; requestAnimationFrame(a); })();
+  }
+}
+
+function spawnLightningEffect(pos){
+  for(let i=0;i<8;i++){
+    const geo = new THREE.CylinderGeometry(0.03,0.03,5+Math.random()*4,4);
+    const mat = new THREE.MeshBasicMaterial({ color:0xfbbf24, transparent:true, opacity:0.9 });
+    const mesh = new THREE.Mesh(geo,mat);
+    mesh.position.copy(pos);
+    mesh.position.x += (Math.random()-0.5)*16;
+    mesh.position.z += (Math.random()-0.5)*16;
+    mesh.position.y += 2;
+    mesh.rotation.set(Math.random()*0.5,Math.random()*Math.PI,Math.random()*0.5);
+    scene.add(mesh);
+    setTimeout(() => scene.remove(mesh), 300+Math.random()*200);
+  }
+  flashAbility(0xfbbf24,0.4);
+}
+
+function spawnFrameRipEffect(){
+  const geo = new THREE.PlaneGeometry(0.2,30);
+  const mat = new THREE.MeshBasicMaterial({ color:0xa855f7, transparent:true, opacity:0.9, side:THREE.DoubleSide });
+  for(let i=0;i<5;i++){
+    const mesh = new THREE.Mesh(geo,mat.clone());
+    mesh.position.copy(playerGroup.position);
+    mesh.position.x += (Math.random()-0.5)*30;
+    mesh.position.z += (Math.random()-0.5)*30;
+    mesh.position.y += 8;
+    mesh.rotation.x = Math.PI/2; mesh.rotation.z = Math.random()*Math.PI;
+    scene.add(mesh);
+    const st=Date.now();
+    (function a(){ const t=(Date.now()-st)/800; if(t>=1){scene.remove(mesh);return;} mesh.material.opacity=0.9*(1-t); requestAnimationFrame(a); })();
+  }
+}
+
+function spawnBlinkEffect(){
+  const geo = new THREE.BoxGeometry(0.8,1.8,0.5);
+  const mat = new THREE.MeshBasicMaterial({ color:0x38bdf8, transparent:true, opacity:0.8, wireframe:true });
+  const mesh = new THREE.Mesh(geo,mat);
+  mesh.position.copy(playerGroup.position); mesh.position.y+=0.9; scene.add(mesh);
+  const st=Date.now();
+  (function a(){ const t=(Date.now()-st)/500; if(t>=1){scene.remove(mesh);return;} mesh.material.opacity=0.8*(1-t); requestAnimationFrame(a); })();
+}
+
+function spawnEchoBomb(pos){
+  const geo = new THREE.SphereGeometry(0.4,8,8);
+  const mat = new THREE.MeshBasicMaterial({ color:0xfbbf24 });
+  const mesh = new THREE.Mesh(geo,mat);
+  mesh.position.copy(pos); mesh.position.y+=0.4; scene.add(mesh);
+  setTimeout(() => {
+    scene.remove(mesh);
+    spawnLightningEffect(pos);
+    enemies.forEach(e => {
+      if(!e.alive) return;
+      if(e.mesh.position.distanceTo(pos)<7) damageEnemy(e, 80, '#fbbf24');
+    });
+  }, 3000);
+}
+
+function spawnDeathEffect(pos){
+  for(let i=0;i<22;i++){
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.15,0.15,0.15), new THREE.MeshBasicMaterial({ color:Math.random()>0.5?0xff2200:0xff8800 }));
+    m.position.copy(pos); scene.add(m);
+    const vel = new THREE.Vector3((Math.random()-0.5)*9, Math.random()*7+2, (Math.random()-0.5)*9);
+    const sp = new THREE.Vector3(Math.random()*5, Math.random()*5, Math.random()*5);
+    const st=Date.now();
+    (function a(){ const t=(Date.now()-st)/900; if(t>=1){scene.remove(m);return;} m.position.addScaledVector(vel,0.016); vel.y-=0.2; m.rotation.x+=sp.x*0.016; m.rotation.y+=sp.y*0.016; m.material.opacity=1-t; m.material.transparent=true; requestAnimationFrame(a); })();
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// CURSE MECHANIC (Mr. Sandman)
+// ══════════════════════════════════════════════════════════
+function applyCurse(){
+  if(state.cursed || state.flowActive || state.shieldActive) return;
+  state.cursed = true;
+  state.curseTimer = 6;
+  document.getElementById('curse-overlay').style.background='rgba(139,0,0,0.2)';
+  document.getElementById('sandman-vignette').style.opacity='1';
+  document.getElementById('curse-text').style.opacity='1';
+  addFeed('👁 YOU MADE EYE CONTACT — CURSED!', 'boss');
+}
+
+// ══════════════════════════════════════════════════════════
+// COMBAT
+// ══════════════════════════════════════════════════════════
+function damageEnemy(enemy, dmg, color='#ff4444'){
+  if(!enemy.alive) return;
+  enemy.hp -= dmg;
+  const ratio = Math.max(0, enemy.hp/enemy.maxHp);
+  if(enemy.hpBarFg){ enemy.hpBarFg.scale.x=ratio; enemy.hpBarFg.position.x=-(1-ratio)/2; if(ratio<0.3) enemy.hpBarFg.material.color.set(0xff6600); }
+  if(enemy.isBoss){
+    document.getElementById('boss-bar-fill').style.width = (ratio*100)+'%';
+    // Phase 2 at 50%
+    if(ratio < 0.5 && enemy.phase===1){
+      enemy.phase = 2;
+      document.getElementById('boss-phase-label').textContent = 'PHASE II — NIGHTMARE';
+      enemy.speed *= 1.4;
+      addFeed('⚠️ Mr. Sandman enters Phase 2!', 'boss');
+      flashAbility(0xff0000, 0.6);
+    }
+  }
+  showDamageNumber(enemy.mesh.position, dmg, color);
+  spawnHitSpark(enemy.mesh.position.clone().add(new THREE.Vector3(0,1,0)));
+  if(enemy.hp<=0) killEnemy(enemy);
+}
+
+function killEnemy(enemy){
+  enemy.alive = false;
+  spawnDeathEffect(enemy.mesh.position.clone());
+  scene.remove(enemy.mesh);
+
+  if(enemy.isBoss){
+    state.bossDefeated = true;
+    document.getElementById('boss-bar-wrap').style.display='none';
+    addFeed('💀 MR. SANDMAN DEFEATED!', 'boss');
+    addEndingPoints('frame', 10);
+    // Drop tokens
+    state.tokens += 150; updateHud();
+    addFeed('🎰 +150 Gacha Tokens!', 'gold');
+    // Trigger boss-defeated dialogue
+    setTimeout(() => openEndingCheck(), 1500);
+  } else {
+    state.kills++;
+    const xp = 25+Math.floor(Math.random()*15);
+    state.xp += xp; state.tokens += 10;
+    addFeed(`Entity eliminated +${xp}XP +10🪙`);
+    updateHud();
+    if(state.xp >= state.xpToNext) rankUp();
+    if(enemies.filter(e=>e.alive).length < 4) setTimeout(spawnNewEnemy, 3000);
+    // Boss spawn at 10 kills
+    if(state.kills === 10 && !state.bossSpawned){
+      state.bossSpawned = true;
+      addFeed('⚠️ WARNING: MR. SANDMAN APPROACHES', 'boss');
+      setTimeout(() => {
+        createEnemy(20, 20, 'sandman');
+        document.getElementById('boss-bar-wrap').style.display='flex';
+        setTimeout(() => startDialogue('sandman_warn'), 1000);
+      }, 2000);
+    }
+  }
+}
+
+function playerTakeDamage(dmg){
+  if(state.shieldActive){ addFeed('🛡 Shield blocked!'); return; }
+  if(state.dodging) dmg = Math.floor(dmg*0.2);
+  const finalDmg = state.flowActive ? Math.floor(dmg*0.5) : dmg;
+  state.hp = Math.max(0, state.hp-finalDmg);
+  document.getElementById('hit-flash').style.opacity='1';
+  setTimeout(() => document.getElementById('hit-flash').style.opacity='0', 120);
+  updateHud();
+  if(state.hp <= 0){
+    if(state.hasRevive && !state.reviveUsed){
+      state.reviveUsed=true; state.hasRevive=false;
+      state.hp = Math.floor(state.maxHp*0.3);
+      addFeed('✨ Echo Soul triggered — revived!', 'gold');
+      flashAbility(0xfbbf24,0.8);
+      return;
+    }
+    showDeathScreen();
+  }
+}
+
+function showDeathScreen(){
+  document.getElementById('overlay-title').textContent='YOU DIED';
+  document.getElementById('overlay-sub').textContent=`Rank: ${RANKS[state.rank]} | Kills: ${state.kills} | Clan: ${CLANS[state.selectedClan]?.name||'None'}`;
+  document.getElementById('overlay').style.display='flex';
+}
+
+// ══════════════════════════════════════════════════════════
+// RANK SYSTEM
+// ══════════════════════════════════════════════════════════
+function rankUp(){
+  state.xp -= state.xpToNext;
+  state.rank = Math.min(RANKS.length-1, state.rank+1);
+  state.xpToNext = Math.floor(state.xpToNext*1.65);
+  state.maxHp += 20; state.hp = state.maxHp;
+  state.tokens += 50;
+  document.getElementById('rank-display').textContent = 'RANK: '+RANKS[state.rank];
+  document.getElementById('overlay-title').textContent='RANK UP!';
+  document.getElementById('overlay-sub').textContent=`Ascended to ${RANKS[state.rank]} | +50 Tokens`;
+  document.getElementById('overlay').style.display='flex';
+  flashAbility(0xfbbf24,0.7); purpleLight.intensity=10;
+  setTimeout(() => purpleLight.intensity=3, 500);
+  addEndingPoints('savior',1);
+}
+
+function closeOverlay(){
+  document.getElementById('overlay').style.display='none';
+  if(state.hp<=0) resetGame();
+}
+
+function resetGame(){
+  state.hp=100; state.maxHp=100; state.xp=0; state.xpToNext=100;
+  state.rank=0; state.kills=0; state.bossSpawned=false; state.bossDefeated=false;
+  state.cursed=false; state.flowActive=false; state.comboCount=0;
+  state.hasRevive=false; state.reviveUsed=false;
+  playerGroup.position.set(0,0,0);
+  enemies.forEach(e => { if(e.alive) scene.remove(e.mesh); });
+  enemies.length=0;
+  [[10,10],[-15,8],[20,-5],[-8,-20],[18,20],[-22,-15],[12,-15],[-5,15]].forEach(([x,z]) => { createEnemy(x,z); });
+  document.getElementById('boss-bar-wrap').style.display='none';
+  document.getElementById('curse-overlay').style.background='rgba(139,0,0,0)';
+  document.getElementById('sandman-vignette').style.opacity='0';
+  updateHud();
+}
+
+function spawnNewEnemy(){
+  const a = Math.random()*Math.PI*2, d = 20+Math.random()*20;
+  createEnemy(playerGroup.position.x+Math.cos(a)*d, playerGroup.position.z+Math.sin(a)*d, 'basic');
+}
+
+// ══════════════════════════════════════════════════════════
+// ENDINGS SYSTEM
+// ══════════════════════════════════════════════════════════
+function addEndingPoints(path, amt){
+  state.endingPoints[path] = (state.endingPoints[path]||0) + amt;
+  document.getElementById('ep-'+path).textContent = state.endingPoints[path];
+  // Light up ending flag when dominant
+  const max = Math.max(...Object.values(state.endingPoints));
+  ['savior','tyrant','frame'].forEach(p => {
+    const flag = document.getElementById('ef-'+p);
+    flag.style.boxShadow = state.endingPoints[p]===max && max>0 ? '0 0 8px currentColor' : 'none';
+  });
+}
+
+function openEndingCheck(){
+  const ep = state.endingPoints;
+  const dominant = Object.entries(ep).sort((a,b)=>b[1]-a[1])[0];
+  const endings = {
+    savior:{ title:'🟢 SAVIOR ENDING', sub:'You chose to protect humanity.\nThe world remembers Kaelen Vire as its guardian.' },
+    tyrant:{ title:'🔴 TYRANT ENDING', sub:'Power consumed you.\nYou now rule what remains of humanity — broken and afraid.' },
+    frame: { title:'🟣 FRAME COLLAPSE ENDING', sub:'Reality fractures.\nYou step into the In-Between.\nThe loop begins again.' },
+  };
+  const end = endings[dominant[0]];
+  document.getElementById('overlay-title').textContent = end.title;
+  document.getElementById('overlay-sub').textContent = end.sub;
+  document.getElementById('overlay').style.display='flex';
+}
+
+// ══════════════════════════════════════════════════════════
+// DIALOGUE SYSTEM
+// ══════════════════════════════════════════════════════════
+let dialogueOpen = false;
+let currentDialogue = null;
+let dialogueLineIndex = 0;
+let dialogueQueue = [];
+let typingInterval = null;
+
+function startDialogue(id){
+  if(dialogueOpen) return;
+  const d = DIALOGUES[id];
+  if(!d) return;
+  currentDialogue = d;
+  dialogueLineIndex = 0;
+  dialogueQueue = [...d.lines];
+  dialogueOpen = true;
+  document.getElementById('dialogue-screen').classList.add('open');
+  document.getElementById('dialogue-sprite').textContent = d.sprite;
+  document.getElementById('dialogue-name').textContent = d.name;
+  showDialogueLine(dialogueQueue[0]);
+  if(pointerLocked) document.exitPointerLock();
+}
+
+function showDialogueLine(line){
+  clearInterval(typingInterval);
+  const textEl = document.getElementById('dialogue-text');
+  const choicesEl = document.getElementById('dialogue-choices');
+  const contEl = document.getElementById('dialogue-continue');
+  choicesEl.innerHTML=''; textEl.textContent='';
+
+  // Typewriter effect
+  let i=0;
+  typingInterval = setInterval(() => {
+    textEl.textContent += line.text[i]||'';
+    i++;
+    if(i>=line.text.length){
+      clearInterval(typingInterval);
+      if(line.choices){
+        line.choices.forEach(c => {
+          const btn = document.createElement('div');
+          btn.className='dialogue-choice'; btn.textContent=c.text;
+          btn.onclick = () => makeChoice(c);
+          choicesEl.appendChild(btn);
+        });
+        contEl.style.display='none';
+      } else {
+        contEl.style.display='block';
+      }
+    }
+  }, 28);
+}
+
+function makeChoice(choice){
+  if(choice.endingFlag) addEndingPoints(choice.endingFlag, 3);
+  const branch = currentDialogue.branches[choice.next];
+  if(branch){ dialogueQueue = branch; dialogueLineIndex=0; showDialogueLine(branch[0]); }
+  else closeDialogue();
+}
+
+function advanceDialogue(){
+  if(!dialogueOpen) return;
+  const line = dialogueQueue[dialogueLineIndex];
+  if(line?.choices) return; // wait for choice
+  dialogueLineIndex++;
+  if(dialogueLineIndex < dialogueQueue.length){
+    showDialogueLine(dialogueQueue[dialogueLineIndex]);
+  } else {
+    closeDialogue();
+  }
+}
+
+function closeDialogue(){
+  clearInterval(typingInterval);
+  dialogueOpen=false;
+  document.getElementById('dialogue-screen').classList.remove('open');
+  currentDialogue=null;
+}
+
+function tryTalkNPC(){
+  const dist = npcGroup.position.distanceTo(playerGroup.position);
+  if(dist < 8) startDialogue('survivor');
+  else addFeed('No NPC nearby. (Tab to talk)');
+}
+
+// ══════════════════════════════════════════════════════════
+// GACHA SYSTEM
+// ══════════════════════════════════════════════════════════
+function openGacha(){
+  document.getElementById('overlay').style.display='none';
+  document.getElementById('gacha-screen').style.display='flex';
+  document.getElementById('gacha-tokens').textContent = state.tokens;
+  updateGachaOwned();
+  if(pointerLocked) document.exitPointerLock();
+}
+
+function closeGacha(){
+  document.getElementById('gacha-screen').style.display='none';
+  document.getElementById('gacha-result').innerHTML='';
+}
+
+function doPull(count){
+  const cost = count===1 ? 50 : 120;
+  if(state.tokens < cost){ alert('Not enough tokens! Kill enemies to earn more.'); return; }
+  state.tokens -= cost;
+  document.getElementById('gacha-tokens').textContent = state.tokens;
+
+  const result = document.getElementById('gacha-result');
+  result.innerHTML='';
+
+  for(let i=0;i<count;i++){
+    const roll = Math.random();
+    let pool;
+    if(roll < 0.05) pool = GACHA_POOL.filter(a=>a.tier==='legend');
+    else if(roll < 0.25) pool = GACHA_POOL.filter(a=>a.tier==='epic');
+    else pool = GACHA_POOL.filter(a=>a.tier==='rare');
+    const picked = pool[Math.floor(Math.random()*pool.length)];
+
+    const card = document.createElement('div');
+    card.className = `gacha-card ${picked.tier}`;
+    card.style.animationDelay = (i*0.15)+'s';
+    card.innerHTML = `<div class="g-icon">${picked.icon}</div><div class="g-name">${picked.name}</div><div class="g-tier">${picked.tier.toUpperCase()}</div><div style="font-size:9px;color:#666;margin-top:4px">${picked.desc}</div>`;
+    result.appendChild(card);
+
+    // Equip best
+    if(!state.gachaOwned.find(o=>o.id===picked.id)) state.gachaOwned.push(picked);
+    // Auto-equip if better tier or first
+    if(!state.gachaAbility || ['epic','legend'].includes(picked.tier)){
+      state.gachaAbility = picked;
+      abilities.g.name = picked.name;
+      abilities.g.cooldown = picked.cooldown;
+      document.getElementById('slot-g-icon').textContent = picked.icon;
+      document.getElementById('slot-g-name').textContent = picked.name;
+      if(!document.getElementById('slot-g').classList.contains('locked')) {
+        document.getElementById('slot-g').classList.add('ready');
+      }
+    }
+  }
+  updateGachaOwned();
+  updateHud();
+}
+
+function updateGachaOwned(){
+  const el = document.getElementById('gacha-owned');
+  if(state.gachaOwned.length===0){ el.textContent='No abilities unlocked yet.'; return; }
+  el.textContent = 'Owned: ' + state.gachaOwned.map(a=>`${a.icon}${a.name}`).join(' · ');
+}
+
+// Override G slot to use gacha ability if no clan ability
+// (already handled — G is clan ability; if clan is selected, gacha auto-equips but doesn't override G key unless clan has no G)
+
+// ══════════════════════════════════════════════════════════
+// HUD
+// ══════════════════════════════════════════════════════════
+function updateHud(){
+  document.getElementById('hp-bar').style.width    = (state.hp/state.maxHp*100)+'%';
+  document.getElementById('xp-bar').style.width    = (state.xp/state.xpToNext*100)+'%';
+  document.getElementById('stamina-bar').style.width = (state.stamina/state.maxStamina*100)+'%';
+  document.getElementById('rank-display').textContent = 'RANK: '+RANKS[state.rank];
+  document.getElementById('quest-text').innerHTML =
+    `Kills: <b style="color:#a855f7">${state.kills}</b> | Tokens: <b style="color:#fbbf24">🪙${state.tokens}</b><br>Rank: <b style="color:#fbbf24">${RANKS[state.rank]}</b>`;
+  document.getElementById('gacha-tokens').textContent = state.tokens;
+}
+
+function flashAbility(color, intensity){
+  const el = document.getElementById('ability-flash');
+  const r=(color>>16)&255, g=(color>>8)&255, b=color&255;
+  el.style.background=`rgba(${r},${g},${b},${intensity})`;
+  el.style.opacity='1';
+  setTimeout(()=>el.style.opacity='0', 280);
+}
+
+function addFeed(msg, type=''){
+  const feed=document.getElementById('feed');
+  const div=document.createElement('div');
+  div.className='feed-msg'+(type?' feed-'+type:'');
+  div.textContent=msg;
+  feed.appendChild(div);
+  setTimeout(()=>div.remove(),3100);
+  while(feed.children.length>6) feed.removeChild(feed.firstChild);
+}
+
+function showDamageNumber(worldPos, dmg, color){
+  const proj = worldPos.clone().project(camera);
+  if(proj.z > 1) return;
+  const x=(proj.x*0.5+0.5)*window.innerWidth;
+  const y=(-proj.y*0.5+0.5)*window.innerHeight;
+  const el=document.createElement('div');
+  el.className='dmg-number'; el.style.color=color;
+  el.style.left=(x+(Math.random()-0.5)*40)+'px';
+  el.style.top=(y-20)+'px';
+  el.textContent=dmg;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),1000);
+}
+
+function updateCooldownUI(){
+  ['q','e','r','f'].forEach(key => {
+    const ab=abilities[key];
+    const pct=ab.timer>0 ? (ab.timer/ab.cooldown*100) : 0;
+    document.getElementById(`cd-${key}`).style.height=pct+'%';
+    document.getElementById(`cdt-${key}`).textContent=ab.timer>0?Math.ceil(ab.timer):'';
+    document.getElementById(`slot-${key}`).classList.toggle('ready', ab.timer<=0);
+    if(key==='f') document.getElementById(`slot-${key}`).classList.toggle('active', state.flowActive);
+  });
+  // G slot
+  const gAb=abilities['g'];
+  const gPct=gAb.timer>0?(gAb.timer/gAb.cooldown*100):0;
+  document.getElementById('cd-g').style.height=gPct+'%';
+  document.getElementById('cdt-g').textContent=gAb.timer>0?Math.ceil(gAb.timer):'';
+}
+
+// ══════════════════════════════════════════════════════════
+// MINIMAP
+// ══════════════════════════════════════════════════════════
+const mmCanvas=document.createElement('canvas');
+mmCanvas.width=110; mmCanvas.height=110;
+const mmDiv=document.getElementById('minimap')||document.createElement('div');
+mmDiv.id='minimap'; mmDiv.appendChild(mmCanvas);
+document.getElementById('hud').appendChild(mmDiv);
+const mmCtx=mmCanvas.getContext('2d');
+
+function updateMinimap(){
+  mmCtx.clearRect(0,0,110,110);
+  const cx=55,cy=55,sc=1.4;
+  mmCtx.fillStyle='#a855f7'; mmCtx.beginPath(); mmCtx.arc(cx,cy,4,0,Math.PI*2); mmCtx.fill();
+  mmCtx.strokeStyle='#c084fc'; mmCtx.lineWidth=2; mmCtx.beginPath();
+  mmCtx.moveTo(cx,cy); mmCtx.lineTo(cx-Math.sin(yaw)*10,cy-Math.cos(yaw)*10); mmCtx.stroke();
+  // NPC
+  const ndx=(npcGroup.position.x-playerGroup.position.x)*sc;
+  const ndz=(npcGroup.position.z-playerGroup.position.z)*sc;
+  const nx=cx+ndx, ny=cy+ndz;
+  if(nx>0&&nx<110&&ny>0&&ny<110){ mmCtx.fillStyle='#22c55e'; mmCtx.beginPath(); mmCtx.arc(nx,ny,3,0,Math.PI*2); mmCtx.fill(); }
+  enemies.forEach(e => {
+    if(!e.alive) return;
+    const dx=(e.mesh.position.x-playerGroup.position.x)*sc;
+    const dz=(e.mesh.position.z-playerGroup.position.z)*sc;
+    const ex=cx+dx, ey=cy+dz;
+    if(ex>0&&ex<110&&ey>0&&ey<110){
+      mmCtx.fillStyle=e.isBoss?'#ff6600':'#ef4444';
+      mmCtx.beginPath(); mmCtx.arc(ex,ey,e.isBoss?5:3,0,Math.PI*2); mmCtx.fill();
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+// MAIN LOOP
+// ══════════════════════════════════════════════════════════
+const clock = new THREE.Clock();
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(),0.05);
+
+  if(dialogueOpen) { renderer.render(scene,camera); return; }
+
+  // Camera
+  if(pointerLocked){ yaw-=mouse.dx*0.002; pitch-=mouse.dy*0.002; pitch=Math.max(-0.4,Math.min(0.5,pitch)); mouse.dx=0; mouse.dy=0; }
+
+  // Player movement
+  const spd = (keys['ShiftLeft']||keys['ShiftRight']) ? 8 : 4;
+  const mv = new THREE.Vector3();
+  if(keys['KeyW']||keys['ArrowUp'])    mv.z -= 1;
+  if(keys['KeyS']||keys['ArrowDown'])  mv.z += 1;
+  if(keys['KeyA']||keys['ArrowLeft'])  mv.x -= 1;
+  if(keys['KeyD']||keys['ArrowRight']) mv.x += 1;
+
+  if(mv.length()>0){
+    mv.normalize().applyAxisAngle(new THREE.Vector3(0,1,0),yaw);
+    playerGroup.position.addScaledVector(mv, spd*dt);
+    playerGroup.rotation.y = yaw;
+    // Leg bob
+    playerBody.rotation.x = Math.sin(Date.now()*0.01)*0.08;
+    // Arm swing while walking
+    if(!punchAnimating){
+      armL.rotation.x = Math.sin(Date.now()*0.01)*0.3;
+      armR.rotation.x = -Math.sin(Date.now()*0.01)*0.3;
+    }
+  } else {
+    if(!punchAnimating){ armL.rotation.x = 0; armR.rotation.x = 0; }
+    playerBody.rotation.x = 0;
+  }
+
+  playerGroup.position.x = Math.max(-90,Math.min(90,playerGroup.position.x));
+  playerGroup.position.z = Math.max(-90,Math.min(90,playerGroup.position.z));
+
+  // Camera follow
+  const co = new THREE.Vector3(0,3.5,6);
+  co.applyAxisAngle(new THREE.Vector3(1,0,0),pitch);
+  co.applyAxisAngle(new THREE.Vector3(0,1,0),yaw);
+  camera.position.lerp(playerGroup.position.clone().add(co),0.12);
+  camera.lookAt(playerGroup.position.clone().add(new THREE.Vector3(0,1,0)));
+
+  // Cooldowns
+  if(state.punchCooldown>0) state.punchCooldown-=dt;
+  for(const k in abilities) if(abilities[k].timer>0) abilities[k].timer-=dt;
+
+  // Dodge
+  if(state.dodging){ state.dodgeTimer-=dt; if(state.dodgeTimer<=0) state.dodging=false; }
+  if(state.dodgeCooldown>0) state.dodgeCooldown-=dt;
+
+  // Stamina regen
+  if(!state.dodging && state.stamina < state.maxStamina) state.stamina = Math.min(state.maxStamina, state.stamina+dt*18);
+
+  // Combo timeout
+  if(state.comboCount>0 && Date.now()-state.lastHitTime>1500){ state.comboCount=0; updateComboDisplay(); }
+
+  // Curse
+  if(state.cursed){ state.curseTimer-=dt; if(state.curseTimer<=0){ state.cursed=false; document.getElementById('curse-overlay').style.background='rgba(139,0,0,0)'; document.getElementById('sandman-vignette').style.opacity='0'; document.getElementById('curse-text').style.opacity='0'; } }
+
+  // Berserker
+  if(state.berserkerActive){ state.berserkerTimer-=dt; if(state.berserkerTimer<=0){ state.berserkerActive=false; addFeed('Berserker expired'); } }
+
+  // Flow
+  if(state.flowActive){ state.flowTimer-=dt; if(state.flowTimer<=0){ state.flowActive=false; document.getElementById('flow-indicator').style.opacity='0'; document.getElementById('flow-overlay').classList.remove('active'); auraMat.color.set(0xa855f7); playerLight.color.set(0xa855f7); playerLight.intensity=2; } }
+
+  // HP regen in flow
+  if(state.flowActive&&state.hp<state.maxHp){ state.hp=Math.min(state.maxHp,state.hp+dt*6); }
+
+  // ── ENEMY AI ──
+  enemies.forEach(e => {
+    if(!e.alive) return;
+    if(e.hpBarBg){ const lk=camera.position.clone().sub(e.mesh.position).add(e.mesh.position); e.hpBarBg.lookAt(lk); }
+    if(e.stunTimer>0){ e.stunTimer-=dt; return; }
+
+    const dist = e.mesh.position.distanceTo(playerGroup.position);
+
+    if(e.isBoss){
+      // Sandman AI
+      e.mesh.rotation.y += dt*0.4;
+      // Float
+      e.mesh.position.y = Math.sin(Date.now()*0.001)*0.3;
+      // Sand particles drift
+      e.mesh.children.forEach((c,i) => { if(i>2&&i<23){ c.position.y+=Math.sin(Date.now()*0.002+i)*0.01; c.position.x+=Math.cos(Date.now()*0.0015+i)*0.01; c.position.z+=Math.sin(Date.now()*0.0018+i)*0.01; }});
+
+      if(dist>2){
+        const dir=playerGroup.position.clone().sub(e.mesh.position); dir.y=0; dir.normalize();
+        e.mesh.position.addScaledVector(dir, e.speed*dt);
+      }
+      e.attackTimer-=dt;
+      if(e.attackTimer<=0){
+        e.attackTimer = e.phase===2 ? 1.0 : 1.8;
+        playerTakeDamage(e.phase===2?20:12);
+        if(!state.flowActive&&!state.shieldActive) applyCurse();
+      }
+      // Clone target ignore for boss
+    } else {
+      // Use clone decoy target if available
+      const target = e._cloneTarget || playerGroup.position;
+      if(dist<25||e._cloneTarget) e.state='chase'; else e.state='patrol';
+
+      if(e.state==='chase'){
+        const dir=target.clone().sub(e.mesh.position); dir.y=0;
+        if(dir.length()>1.5){ dir.normalize(); e.mesh.position.addScaledVector(dir,e.speed*dt); e.mesh.rotation.y=Math.atan2(dir.x,dir.z); }
+        else if(!e._cloneTarget){
+          e.attackTimer-=dt;
+          if(e.attackTimer<=0){ e.attackTimer=1.6; playerTakeDamage(8+Math.floor(Math.random()*8)); }
+        }
+      } else {
+        e.patrolAngle+=dt*0.5;
+        const px=e.patrolOrigin.x+Math.cos(e.patrolAngle)*4;
+        const pz=e.patrolOrigin.z+Math.sin(e.patrolAngle)*4;
+        const dir=new THREE.Vector3(px-e.mesh.position.x,0,pz-e.mesh.position.z).normalize();
+        e.mesh.position.addScaledVector(dir,e.speed*0.5*dt);
+        e.mesh.rotation.y=Math.atan2(dir.x,dir.z);
+      }
+    }
+  });
+
+  // NPC marker bob
+  markerMesh.rotation.z += dt*1.5;
+  markerMesh.position.y = 2.2+Math.sin(Date.now()*0.003)*0.12;
+
+  // Particles
+  const pp=particles.geometry.attributes.position.array;
+  for(let i=0;i<pCount;i++){ pp[i*3+1]+=Math.sin(Date.now()*0.001+i)*0.005; if(pp[i*3+1]>25) pp[i*3+1]=1; }
+  particles.geometry.attributes.position.needsUpdate=true;
+
+  // Aura
+  aura.rotation.z+=dt*2;
+  purpleLight.intensity=2+Math.sin(Date.now()*0.003)*0.5;
+  if(state.berserkerActive){ auraMat.color.set(0xef4444); playerLight.color.set(0xff4400); }
+  else if(!state.flowActive){ auraMat.color.set(0xa855f7); playerLight.color.set(0xa855f7); playerLight.intensity=2; }
+
+  // Mouse-hold continuous punch
+  if(mouse.buttons[0] && state.punchCooldown<=0 && !punchAnimating) punch();
+
+  updateCooldownUI();
+  updateMinimap();
+  updateHud();
+
+  renderer.render(scene,camera);
+}
+
+// ══════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════
+updateHud();
+animate();
+</script>
+</body>
+</html>
