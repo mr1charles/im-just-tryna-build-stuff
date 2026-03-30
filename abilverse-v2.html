@@ -103,6 +103,14 @@ canvas { display:block; }
 #flow-overlay  { position:fixed; inset:0; pointer-events:none; border:3px solid rgba(251,191,36,0); transition:border-color 0.5s; }
 #flow-overlay.active { border-color:rgba(251,191,36,0.5); box-shadow:inset 0 0 60px rgba(251,191,36,0.15); }
 #sandman-vignette { position:fixed; inset:0; pointer-events:none; background:radial-gradient(ellipse at center, transparent 30%, rgba(139,0,0,0.6) 100%); opacity:0; transition:opacity 1s; }
+#flow-distortion {
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  backdrop-filter: blur(6px) contrast(120%);
+  opacity:0;
+  transition:opacity 0.4s;
+}
 
 /* Flow indicator */
 #flow-indicator { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); font-size:26px; font-weight:bold; letter-spacing:8px; color:#fbbf24; text-shadow:0 0 30px #fbbf24; opacity:0; pointer-events:none; transition:opacity 0.5s; }
@@ -339,6 +347,7 @@ canvas { display:block; }
   <div id="ability-flash"></div>
   <div id="flow-overlay"></div>
   <div id="sandman-vignette"></div>
+  <div id="flow-distortion"></div>
   <div id="punch-flash"></div>
   <div id="flow-indicator">⚡ FLOW STATE ⚡</div>
   <div id="curse-text">YOU ARE CURSED</div>
@@ -518,6 +527,64 @@ function selectClan(key) {
 }
 
 // ══════════════════════════════════════════════════════════
+// ANIMATED SPRITE SYSTEM
+// ══════════════════════════════════════════════════════════
+function createAnimatedSprite(texturePath, frames = 4, speed = 0.15, scale = 3.5) {
+  const texture = new THREE.TextureLoader().load(texturePath);
+
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.repeat.x = 1 / frames;
+
+  const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+  const sprite = new THREE.Sprite(material);
+
+  sprite.scale.set(scale, scale, 1);
+
+  sprite.userData = {
+    frame: 0,
+    frames,
+    speed,
+    timer: 0
+  };
+
+  return sprite;
+}
+
+function updateSpriteAnimation(sprite, delta) {
+  if (!sprite || !sprite.userData) return;
+
+  const data = sprite.userData;
+  data.timer += delta;
+
+  if (data.timer >= data.speed) {
+    data.timer = 0;
+    data.frame = (data.frame + 1) % data.frames;
+    sprite.material.map.offset.x = data.frame / data.frames;
+  }
+}
+
+function generateCharacterSprite() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+
+  const ctx = canvas.getContext('2d');
+
+  const colors = ['#ef4444','#3b82f6','#22c55e','#f59e0b','#a855f7'];
+
+  ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+  ctx.fillRect(16, 8, 32, 48);
+
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(20, 15, 8, 8);
+  ctx.fillRect(36, 15, 8, 8);
+
+  return new THREE.CanvasTexture(canvas);
+}
+
+// ══════════════════════════════════════════════════════════
 // THREE.JS SETUP
 // ══════════════════════════════════════════════════════════
 const renderer = new THREE.WebGLRenderer({ antialias:true });
@@ -603,8 +670,9 @@ armL.position.set(-0.46,0.6,0); playerGroup.add(armL);
 const armR = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.7,0.22), new THREE.MeshStandardMaterial({ color:0x4c1d95, roughness:0.5 }));
 armR.position.set(0.46,0.6,0); playerGroup.add(armR);
 
-const playerBody = new THREE.Mesh(new THREE.BoxGeometry(0.7,1.2,0.4), new THREE.MeshStandardMaterial({ color:0x4c1d95, roughness:0.4, metalness:0.6 }));
-playerBody.position.y = 0.6; playerBody.castShadow = true; playerGroup.add(playerBody);
+let playerBody = createAnimatedSprite('Kaelen.png', 4, 0.12, 4);
+playerBody.position.y = 2;
+playerGroup.add(playerBody);
 
 const playerHead = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.5,0.5), new THREE.MeshStandardMaterial({ color:0x6d28d9, roughness:0.4 }));
 playerHead.position.y = 1.45; playerHead.castShadow = true; playerGroup.add(playerHead);
@@ -627,26 +695,43 @@ function createEnemy(x, z, type='basic'){
   const isBoss = type === 'sandman';
   const scale = isBoss ? 1.6 : 1;
 
-  const bMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(0.8*scale, 1.4*scale, 0.4*scale),
-    new THREE.MeshStandardMaterial({ color: isBoss ? 0x1a0000 : 0x7f1d1d, roughness:0.5 })
-  );
-  bMesh.position.y = 0.7*scale; bMesh.castShadow = true; group.add(bMesh);
+  let sprite = null;
+  if(!isBoss){
+    const texture = generateCharacterSprite();
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    sprite = new THREE.Sprite(material);
+    sprite.scale.set(3.5, 3.5, 1);
+    sprite.position.y = 1.75;
+    group.add(sprite);
 
-  const hMesh = new THREE.Mesh(
-    isBoss ? new THREE.CylinderGeometry(0.35*scale,0.35*scale,0.5*scale,8) : new THREE.SphereGeometry(0.3*scale,8,8),
-    new THREE.MeshStandardMaterial({ color: isBoss ? 0x000000 : 0x991b1b })
-  );
-  hMesh.position.y = isBoss ? 1.85*scale : 1.65*scale; hMesh.castShadow = true; group.add(hMesh);
+    // Optional animated fallback if sprite sheet exists
+    const enemySprite = createAnimatedSprite('enemy.png', 4, 0.2, 3.5);
+    enemySprite.position.y = 1.75;
+    enemySprite.visible = false;
+    group.add(enemySprite);
+    group.userData.sprite = enemySprite;
+    group.userData.generatedSprite = sprite;
+  } else {
+    const bMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.8*scale, 1.4*scale, 0.4*scale),
+      new THREE.MeshStandardMaterial({ color: 0x1a0000, roughness:0.5 })
+    );
+    bMesh.position.y = 0.7*scale; bMesh.castShadow = true; group.add(bMesh);
 
-  // Eyes
-  const eyeCol = isBoss ? 0xffffff : 0xff4444;
-  [-0.15*scale, 0.15*scale].forEach(ex => {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.09*scale,6,6), new THREE.MeshBasicMaterial({ color:eyeCol }));
-    eye.position.set(ex, hMesh.position.y, 0.28*scale); group.add(eye);
-  });
+    const hMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.35*scale,0.35*scale,0.5*scale,8),
+      new THREE.MeshStandardMaterial({ color: 0x000000 })
+    );
+    hMesh.position.y = 1.85*scale; hMesh.castShadow = true; group.add(hMesh);
 
-  if(isBoss){
+    const eyeCol = 0xffffff;
+    [-0.15*scale, 0.15*scale].forEach(ex => {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.09*scale,6,6), new THREE.MeshBasicMaterial({ color:eyeCol }));
+      eye.position.set(ex, hMesh.position.y, 0.28*scale); group.add(eye);
+    });
+
     // Sandman: floating sand particles
     for(let i=0;i<20;i++){
       const s = new THREE.Mesh(new THREE.SphereGeometry(0.08,4,4), new THREE.MeshBasicMaterial({ color:0xfbbf24, transparent:true, opacity:0.7 }));
@@ -742,6 +827,14 @@ const PUNCH_SEQUENCE = [
 let punchAnimating = false;
 let punchReset = null;
 
+function playAttack(sprite) {
+  sprite.scale.set(4.5, 3, 1);
+
+  setTimeout(() => {
+    sprite.scale.set(4, 4, 1);
+  }, 100);
+}
+
 function punch(){
   if(state.punchCooldown > 0 || punchAnimating) return;
   if(state.cursed) return; // curse prevents attacks
@@ -751,6 +844,7 @@ function punch(){
   state.punchPhase++;
   state.punchCooldown = 0.28;
   punchAnimating = true;
+  playAttack(playerBody);
 
   // Clear combo reset timer
   if(punchReset) clearTimeout(punchReset);
@@ -893,6 +987,32 @@ function dodge(){
 // ══════════════════════════════════════════════════════════
 // ABILITY SYSTEM
 // ══════════════════════════════════════════════════════════
+function enableFlowAura(sprite) {
+  sprite.material.color.set('#fbbf24');
+  sprite.userData.flowPulse = true;
+}
+
+function spawnFlowParticles(position) {
+  const geometry = new THREE.SphereGeometry(0.05, 6, 6);
+  const material = new THREE.MeshBasicMaterial({ color: 0xfbbf24 });
+
+  for (let i = 0; i < 10; i++) {
+    const particle = new THREE.Mesh(geometry, material);
+
+    particle.position.copy(position);
+
+    particle.userData.vel = new THREE.Vector3(
+      (Math.random() - 0.5) * 0.1,
+      Math.random() * 0.1,
+      (Math.random() - 0.5) * 0.1
+    );
+
+    scene.add(particle);
+
+    setTimeout(() => scene.remove(particle), 500);
+  }
+}
+
 function useAbility(key){
   const ab = abilities[key];
   if(ab.timer > 0) return;
@@ -947,6 +1067,8 @@ function useAbility(key){
     document.getElementById('flow-indicator').style.opacity='1';
     document.getElementById('flow-overlay').classList.add('active');
     auraMat.color.set(0xfbbf24); playerLight.color.set(0xfbbf24); playerLight.intensity=4;
+    enableFlowAura(playerBody);
+    document.getElementById('flow-distortion').style.opacity = 1;
     // cure curse in flow
     state.cursed=false; state.curseTimer=0;
     document.getElementById('curse-overlay').style.background='rgba(139,0,0,0)';
@@ -957,6 +1079,9 @@ function useAbility(key){
       document.getElementById('flow-indicator').style.opacity='0';
       document.getElementById('flow-overlay').classList.remove('active');
       auraMat.color.set(0xa855f7); playerLight.color.set(0xa855f7); playerLight.intensity=2;
+      playerBody.material.color.set('#ffffff');
+      playerBody.userData.flowPulse = false;
+      document.getElementById('flow-distortion').style.opacity = 0;
     }, 8000);
 
   } else if(key==='g'){
@@ -1582,6 +1707,7 @@ function updateMinimap(){
 // MAIN LOOP
 // ══════════════════════════════════════════════════════════
 const clock = new THREE.Clock();
+let flowParticleTick = 0;
 
 function animate(){
   requestAnimationFrame(animate);
@@ -1647,7 +1773,7 @@ function animate(){
   if(state.berserkerActive){ state.berserkerTimer-=dt; if(state.berserkerTimer<=0){ state.berserkerActive=false; addFeed('Berserker expired'); } }
 
   // Flow
-  if(state.flowActive){ state.flowTimer-=dt; if(state.flowTimer<=0){ state.flowActive=false; document.getElementById('flow-indicator').style.opacity='0'; document.getElementById('flow-overlay').classList.remove('active'); auraMat.color.set(0xa855f7); playerLight.color.set(0xa855f7); playerLight.intensity=2; } }
+  if(state.flowActive){ state.flowTimer-=dt; if(state.flowTimer<=0){ state.flowActive=false; document.getElementById('flow-indicator').style.opacity='0'; document.getElementById('flow-overlay').classList.remove('active'); auraMat.color.set(0xa855f7); playerLight.color.set(0xa855f7); playerLight.intensity=2; playerBody.material.color.set('#ffffff'); playerBody.userData.flowPulse = false; document.getElementById('flow-distortion').style.opacity = 0; } }
 
   // HP regen in flow
   if(state.flowActive&&state.hp<state.maxHp){ state.hp=Math.min(state.maxHp,state.hp+dt*6); }
@@ -1716,6 +1842,25 @@ function animate(){
   purpleLight.intensity=2+Math.sin(Date.now()*0.003)*0.5;
   if(state.berserkerActive){ auraMat.color.set(0xef4444); playerLight.color.set(0xff4400); }
   else if(!state.flowActive){ auraMat.color.set(0xa855f7); playerLight.color.set(0xa855f7); playerLight.intensity=2; }
+
+  updateSpriteAnimation(playerBody, dt);
+
+  enemies.forEach(e => {
+    if (e.mesh && e.mesh.userData?.sprite) {
+      updateSpriteAnimation(e.mesh.userData.sprite, dt);
+    }
+  });
+
+  if (playerBody.userData.flowPulse) {
+    const t = Date.now() * 0.005;
+    const scale = 4 + Math.sin(t) * 0.3;
+    playerBody.scale.set(scale, scale, 1);
+    flowParticleTick -= dt;
+    if (flowParticleTick <= 0) {
+      spawnFlowParticles(playerGroup.position.clone());
+      flowParticleTick = 0.12;
+    }
+  }
 
   // Mouse-hold continuous punch
   if(mouse.buttons[0] && state.punchCooldown<=0 && !punchAnimating) punch();
